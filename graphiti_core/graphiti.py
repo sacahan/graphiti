@@ -122,6 +122,7 @@ class Graphiti:
         uri: str | None = None,
         user: str | None = None,
         password: str | None = None,
+        database: str | None = None,
         llm_client: LLMClient | None = None,
         embedder: EmbedderClient | None = None,
         cross_encoder: CrossEncoderClient | None = None,
@@ -129,6 +130,7 @@ class Graphiti:
         graph_driver: GraphDriver | None = None,
         max_coroutines: int | None = None,
         ensure_ascii: bool = False,
+        **kwargs,
     ):
         """
         Initialize a Graphiti instance.
@@ -144,6 +146,8 @@ class Graphiti:
             The username for authenticating with the database. Required for Neo4j, ignored for FalkorDB.
         password : str | None
             The password for authenticating with the database. Required for Neo4j, optional for FalkorDB.
+        database : str | None
+            The database name. Optional for both Neo4j and FalkorDB.
         llm_client : LLMClient | None, optional
             An instance of LLMClient for natural language processing tasks.
             If not provided, a default OpenAIClient will be initialized.
@@ -165,6 +169,8 @@ class Graphiti:
             Whether to escape non-ASCII characters in JSON serialization for prompts. Defaults to False.
             Set as False to preserve non-ASCII characters (e.g., Korean, Japanese, Chinese) in their
             original form, making them readable in LLM logs and improving model understanding.
+        **kwargs
+            Additional configuration parameters passed through to the database driver.
 
         Returns
         -------
@@ -192,7 +198,37 @@ class Graphiti:
         if graph_driver:
             self.driver = graph_driver
         else:
-            self.driver = DriverFactory.create_driver(uri, user, password)
+            try:
+                self.driver = DriverFactory.create_driver(
+                    uri=uri, user=user, password=password, database=database, **kwargs
+                )
+            except ValueError as e:
+                # Enhance error message with user guidance
+                error_msg = str(e)
+                if "uri must be provided" in error_msg:
+                    raise ValueError(
+                        f"{error_msg}. "
+                        "For Neo4j, provide uri, user, and password parameters. "
+                        "For FalkorDB, set GRAPHITI_DB_TYPE=falkordb and configure using environment variables."
+                    ) from e
+                elif "Unsupported database type" in error_msg:
+                    raise ValueError(
+                        f"{error_msg}. "
+                        "Set GRAPHITI_DB_TYPE environment variable to 'neo4j' or 'falkordb'."
+                    ) from e
+                else:
+                    raise
+            except ImportError as e:
+                # Enhance ImportError with installation guidance
+                error_msg = str(e)
+                if "falkordb" in error_msg.lower():
+                    raise ImportError(
+                        f"{error_msg}. "
+                        "Make sure you have FalkorDB installed and accessible. "
+                        "You can also switch to Neo4j by setting GRAPHITI_DB_TYPE=neo4j."
+                    ) from e
+                else:
+                    raise
 
         self.store_raw_episode_content = store_raw_episode_content
         self.max_coroutines = max_coroutines
