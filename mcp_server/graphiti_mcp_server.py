@@ -563,7 +563,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create global config instance - will be properly initialized later
-config = GraphitiConfig()
+config = GraphitiConfig.from_env()
 
 # MCP server instructions
 GRAPHITI_MCP_INSTRUCTIONS = """
@@ -688,11 +688,36 @@ async def initialize_graphiti():
                     "password": config.database.password,
                 }
             )
+        elif config.database.db_type == "falkordb":
+            # For FalkorDB, use the FalkorDB URL directly
+            falkor_url = os.getenv("FALKORDB_URL")
+            if falkor_url:
+                graphiti_kwargs.update(
+                    {
+                        "uri": falkor_url,
+                        "user": None,  # FalkorDB uses Redis protocol, typically no auth
+                        "password": None,
+                    }
+                )
+            else:
+                logger.error("FALKORDB_URL not configured for FalkorDB database type")
+                raise ValueError("FALKORDB_URL must be provided when using FalkorDB")
 
         if config.database.database:
             graphiti_kwargs["database"] = config.database.database
 
-        graphiti_client = Graphiti(**graphiti_kwargs)
+        try:
+            graphiti_client = Graphiti(**graphiti_kwargs)
+        except TypeError as e:
+            if "database" in str(e) and "database" in graphiti_kwargs:
+                # Remove database parameter and try again (fallback for older versions)
+                logger.warning(
+                    f"Graphiti constructor doesn't accept 'database' parameter, retrying without it: {e}"
+                )
+                del graphiti_kwargs["database"]
+                graphiti_client = Graphiti(**graphiti_kwargs)
+            else:
+                raise
 
         driver_init_time = time.time() - driver_start_time
         logger.info(f"Database driver initialization took {driver_init_time:.2f}s")
@@ -798,7 +823,11 @@ async def initialize_graphiti():
         raise
     except Exception as e:
         init_time = time.time() - init_start_time
-        db_type = getattr(config, "database", {}).get("db_type", "unknown")
+        db_type = (
+            getattr(config.database, "db_type", "unknown")
+            if hasattr(config, "database")
+            else "unknown"
+        )
         logger.error(
             f"Failed to initialize Graphiti with {db_type} after {init_time:.2f}s: {str(e)}"
         )
@@ -1362,7 +1391,19 @@ async def get_status() -> StatusResponse:
 
         # Test database connection with timing
         connection_start_time = time.time()
-        await client.driver.client.verify_connectivity()  # type: ignore
+
+        # Database-specific connection verification
+        if config.database.db_type == "neo4j":
+            await client.driver.client.verify_connectivity()  # type: ignore
+        elif config.database.db_type == "falkordb":
+            # FalkorDB doesn't have verify_connectivity, so test with a simple query
+            try:
+                await client.driver.execute_query("RETURN 1")
+            except Exception as e:
+                raise ConnectionError(
+                    f"FalkorDB connection test failed: {str(e)}"
+                ) from e
+
         connection_time = time.time() - connection_start_time
 
         db_type = config.database.db_type

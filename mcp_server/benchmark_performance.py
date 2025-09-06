@@ -37,7 +37,7 @@ from graphiti_mcp_server import (
     GraphitiConfig,
     initialize_graphiti,
     graphiti_client,
-    config as global_config,
+    config,
 )
 
 load_dotenv()
@@ -79,7 +79,7 @@ class PerformanceBenchmark:
 
     async def benchmark_database(self, db_type: str) -> PerformanceMetrics:
         """Benchmark a specific database type."""
-        global global_config, graphiti_client
+        global config, graphiti_client
 
         print(f"\n{'='*60}")
         print(f"Benchmarking {db_type.upper()}")
@@ -121,7 +121,7 @@ class PerformanceBenchmark:
             graphiti_client = None
 
             # Recreate config for this database type
-            global_config = GraphitiConfig.from_env()
+            config = GraphitiConfig.from_env()
 
             # Initialize Graphiti client
             await initialize_graphiti()

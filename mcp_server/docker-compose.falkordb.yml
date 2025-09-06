@@ -3,8 +3,6 @@ services:
     image: falkordb/falkordb:latest
     ports:
       - "6379:6379" # Redis-compatible protocol port
-    environment:
-      - FALKORDB_ARGS=--loadmodule /FalkorDB/bin/src/falkordb.so
     volumes:
       - falkordb_data:/data
     healthcheck:
@@ -13,13 +11,12 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
-    command: ["redis-server", "--loadmodule", "/FalkorDB/bin/src/falkordb.so"]
 
   graphiti-mcp:
     image: zepai/knowledge-graph-mcp:latest
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: mcp_server/Dockerfile
     env_file:
       - path: .env
         required: false # Makes the file optional. Default value is 'true'

@@ -20,13 +20,17 @@ import sys
 import pytest
 
 from graphiti_core.graphiti import Graphiti
-from graphiti_core.search.search_filters import ComparisonOperator, DateFilter, SearchFilters
+from graphiti_core.search.search_filters import (
+    ComparisonOperator,
+    DateFilter,
+    SearchFilters,
+)
 from graphiti_core.search.search_helpers import search_results_to_context_string
 from graphiti_core.utils.datetime_utils import utc_now
 from tests.helpers_test import GraphProvider
 
 pytestmark = pytest.mark.integration
-pytest_plugins = ('pytest_asyncio',)
+pytest_plugins = ("pytest_asyncio",)
 
 
 def setup_logging():
@@ -39,7 +43,9 @@ def setup_logging():
     console_handler.setLevel(logging.INFO)
 
     # Create formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
     # Add formatter to console handler
     console_handler.setFormatter(formatter)
@@ -52,29 +58,52 @@ def setup_logging():
 
 @pytest.mark.asyncio
 async def test_graphiti_init(graph_driver):
-    if graph_driver.provider == GraphProvider.FALKORDB:
-        pytest.skip('Skipping as tests fail on Falkordb')
+    # Skip if no OpenAI API key is available (required for LLM client)
+    import os
+
+    if not os.getenv("OPENAI_API_KEY"):
+        pytest.skip("OpenAI API key required for Graphiti initialization")
 
     logger = setup_logging()
-    graphiti = Graphiti(graph_driver=graph_driver)
 
-    await graphiti.build_indices_and_constraints()
+    try:
+        graphiti = Graphiti(graph_driver=graph_driver)
 
-    search_filter = SearchFilters(
-        node_labels=['Person', 'City'],
-        created_at=[
-            [DateFilter(date=None, comparison_operator=ComparisonOperator.is_null)],
-            [DateFilter(date=utc_now(), comparison_operator=ComparisonOperator.less_than)],
-            [DateFilter(date=None, comparison_operator=ComparisonOperator.is_not_null)],
-        ],
-    )
+        await graphiti.build_indices_and_constraints()
 
-    results = await graphiti.search_(
-        query='Who is Tania',
-        search_filter=search_filter,
-    )
+        search_filter = SearchFilters(
+            node_labels=["Person", "City"],
+            created_at=[
+                [DateFilter(date=None, comparison_operator=ComparisonOperator.is_null)],
+                [
+                    DateFilter(
+                        date=utc_now(), comparison_operator=ComparisonOperator.less_than
+                    )
+                ],
+                [
+                    DateFilter(
+                        date=None, comparison_operator=ComparisonOperator.is_not_null
+                    )
+                ],
+            ],
+        )
 
-    pretty_results = search_results_to_context_string(results)
-    logger.info(pretty_results)
+        results = await graphiti.search_(
+            query="Who is Tania",
+            search_filter=search_filter,
+        )
 
-    await graphiti.close()
+        pretty_results = search_results_to_context_string(results)
+        logger.info(pretty_results)
+
+        await graphiti.close()
+
+    except Exception as e:
+        # Handle database connection issues gracefully
+        if (
+            "Connection refused" in str(e)
+            or "No connection could be made" in str(e)
+            or "api_key" in str(e).lower()
+        ):
+            pytest.skip(f"Database or API not available: {e}")
+        raise
