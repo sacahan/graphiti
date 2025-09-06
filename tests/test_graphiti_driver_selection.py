@@ -15,14 +15,12 @@ limitations under the License.
 """
 
 import os
-import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.driver.factory import DriverFactory
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.graphiti import Graphiti
 
 
@@ -79,11 +77,13 @@ class TestDefaultDriverCreation:
 
     def test_neo4j_driver_requires_uri(self):
         """Test that Neo4j driver creation fails without URI."""
-        with patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "neo4j"}):
-            with pytest.raises(
+        with (
+            patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "neo4j"}),
+            pytest.raises(
                 ValueError, match="uri must be provided when using Neo4j driver"
-            ):
-                DriverFactory.create_driver(uri=None)
+            ),
+        ):
+            DriverFactory.create_driver(uri=None)
 
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "falkordb"})
     def test_falkordb_driver_creation(self):
@@ -118,12 +118,14 @@ class TestDefaultDriverCreation:
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "falkordb"})
     def test_falkordb_driver_import_error(self):
         """Test that helpful error is raised when FalkorDB is not installed."""
-        with patch(
-            "graphiti_core.driver.falkordb_driver.FalkorDriver",
-            side_effect=ImportError("No module named 'falkordb'"),
+        with (
+            patch(
+                "graphiti_core.driver.falkordb_driver.FalkorDriver",
+                side_effect=ImportError("No module named 'falkordb'"),
+            ),
+            pytest.raises(ImportError, match="FalkorDB driver is not available"),
         ):
-            with pytest.raises(ImportError, match="FalkorDB driver is not available"):
-                DriverFactory.create_driver()
+            DriverFactory.create_driver()
 
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "invalid_db"})
     def test_unsupported_database_type(self):

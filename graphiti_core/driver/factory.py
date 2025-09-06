@@ -15,7 +15,6 @@ limitations under the License.
 """
 
 import os
-from typing import Optional
 
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
@@ -34,7 +33,7 @@ class DriverFactory:
         user: str | None = None,
         password: str | None = None,
         database: str | None = None,
-        config: Optional[dict] = None,
+        config: dict | None = None,
         **kwargs,
     ) -> GraphDriver:
         """
@@ -59,9 +58,9 @@ class DriverFactory:
             ValueError: If required parameters are missing for the selected driver type
             ImportError: If the selected driver type is not available
         """
-        db_type = os.getenv("GRAPHITI_DB_TYPE", "neo4j").lower()
+        db_type = os.getenv('GRAPHITI_DB_TYPE', 'neo4j').lower()
 
-        if db_type == "falkordb":
+        if db_type == 'falkordb':
             try:
                 from graphiti_core.driver.falkordb_driver import FalkorDriver
 
@@ -69,27 +68,26 @@ class DriverFactory:
                 # but we can pass through database name and other supported parameters
                 falkor_kwargs = {}
                 if database is not None:
-                    falkor_kwargs["database"] = database
+                    falkor_kwargs['database'] = database
                 # Pass through any additional kwargs that FalkorDriver might accept
                 falkor_kwargs.update(kwargs)
                 return FalkorDriver(**falkor_kwargs)
             except ImportError as e:
                 raise ImportError(
-                    "FalkorDB driver is not available. "
-                    "Install it with: pip install graphiti-core[falkordb]"
+                    'FalkorDB driver is not available. '
+                    'Install it with: pip install graphiti-core[falkordb]'
                 ) from e
-        elif db_type == "neo4j":
+        elif db_type == 'neo4j':
             if uri is None:
-                raise ValueError("uri must be provided when using Neo4j driver")
+                raise ValueError('uri must be provided when using Neo4j driver')
             # Pass database parameter to Neo4j driver if provided
             neo4j_kwargs = {}
             if database is not None:
-                neo4j_kwargs["database"] = database
+                neo4j_kwargs['database'] = database
             # Add any additional kwargs that Neo4j driver might accept
             neo4j_kwargs.update(kwargs)
             return Neo4jDriver(uri, user, password, **neo4j_kwargs)
         else:
             raise ValueError(
-                f"Unsupported database type: {db_type}. "
-                "Supported types: 'neo4j', 'falkordb'"
+                f"Unsupported database type: {db_type}. Supported types: 'neo4j', 'falkordb'"
             )

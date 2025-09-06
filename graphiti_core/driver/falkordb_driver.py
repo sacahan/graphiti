@@ -128,10 +128,10 @@ class FalkorDBConfig(BaseModel):
             db_str = parsed.path[1:]  # Remove leading '/'
             try:
                 database = int(db_str)
-            except ValueError:
+            except ValueError as e:
                 raise ValueError(
                     f"Invalid database number in connection string: {db_str}"
-                )
+                ) from e
 
         # Extract password
         password = parsed.password
@@ -330,10 +330,9 @@ class FalkorDriver(GraphDriver):
                 connection_params["port"] = port
             if password is not None:
                 connection_params["password"] = password
-            if username is not None:
+            if username is not None and "password" not in connection_params:
                 # Support legacy username parameter by setting it as password if password not provided
-                if "password" not in connection_params:
-                    connection_params["password"] = username
+                connection_params["password"] = username
 
             # Initialize the FalkorDB client
             self.client = FalkorDB(**connection_params)

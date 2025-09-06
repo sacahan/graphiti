@@ -18,4 +18,4 @@ from neo4j import Neo4jDriver
 
 from graphiti_core.driver.factory import DriverFactory
 
-__all__ = ["Neo4jDriver", "DriverFactory"]
+__all__ = ['Neo4jDriver', 'DriverFactory']
