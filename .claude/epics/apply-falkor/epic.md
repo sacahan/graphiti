@@ -1,11 +1,12 @@
 ---
 name: apply-falkor
-status: in-progress
+status: completed
 created: 2025-09-05T10:38:27Z
-progress: 25%
+progress: 100%
 prd: .claude/prds/apply-falkor.md
 github: https://github.com/sacahan/graphiti/issues/1
-updated: 2025-09-06T07:20:17Z
+updated: 2025-09-06T16:38:56Z
+completed: 2025-09-06T16:38:56Z
 ---
 
 # Epic: apply-falkor
