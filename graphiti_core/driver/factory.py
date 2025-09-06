@@ -33,7 +33,9 @@ class DriverFactory:
         uri: str | None = None,
         user: str | None = None,
         password: str | None = None,
+        database: str | None = None,
         config: Optional[dict] = None,
+        **kwargs,
     ) -> GraphDriver:
         """
         Create a graph driver based on environment configuration.
@@ -46,7 +48,9 @@ class DriverFactory:
             uri: Database URI (required for Neo4j, ignored for FalkorDB)
             user: Username (required for Neo4j, ignored for FalkorDB)
             password: Password (required for Neo4j, may be used by FalkorDB)
+            database: Database name (used by Neo4j and FalkorDB)
             config: Optional configuration dictionary (currently unused, reserved for future extensions)
+            **kwargs: Additional parameters passed through to specific driver constructors
 
         Returns:
             GraphDriver: Configured driver instance
@@ -61,7 +65,14 @@ class DriverFactory:
             try:
                 from graphiti_core.driver.falkordb_driver import FalkorDriver
 
-                return FalkorDriver()
+                # FalkorDB uses environment-based configuration primarily,
+                # but we can pass through database name and other supported parameters
+                falkor_kwargs = {}
+                if database is not None:
+                    falkor_kwargs["database"] = database
+                # Pass through any additional kwargs that FalkorDriver might accept
+                falkor_kwargs.update(kwargs)
+                return FalkorDriver(**falkor_kwargs)
             except ImportError as e:
                 raise ImportError(
                     "FalkorDB driver is not available. "
@@ -70,7 +81,13 @@ class DriverFactory:
         elif db_type == "neo4j":
             if uri is None:
                 raise ValueError("uri must be provided when using Neo4j driver")
-            return Neo4jDriver(uri, user, password)
+            # Pass database parameter to Neo4j driver if provided
+            neo4j_kwargs = {}
+            if database is not None:
+                neo4j_kwargs["database"] = database
+            # Add any additional kwargs that Neo4j driver might accept
+            neo4j_kwargs.update(kwargs)
+            return Neo4jDriver(uri, user, password, **neo4j_kwargs)
         else:
             raise ValueError(
                 f"Unsupported database type: {db_type}. "
