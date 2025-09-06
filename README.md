@@ -273,6 +273,26 @@ must be set.
 
 Graphiti supports configuration via environment variables for both Neo4j and FalkorDB databases.
 
+#### Database Type Selection
+
+Graphiti can automatically select the appropriate database driver based on the `GRAPHITI_DB_TYPE` environment variable:
+
+- `GRAPHITI_DB_TYPE`: Database backend to use (`neo4j` or `falkordb`, default: `neo4j`)
+
+**Usage:**
+
+```bash
+# Use Neo4j (default)
+export GRAPHITI_DB_TYPE=neo4j
+
+# Use FalkorDB
+export GRAPHITI_DB_TYPE=falkordb
+```
+
+When using `GRAPHITI_DB_TYPE=falkordb`, the Graphiti constructor will automatically create a FalkorDB driver using the FalkorDB environment variables below, ignoring any Neo4j connection parameters (uri, user, password).
+
+When using `GRAPHITI_DB_TYPE=neo4j` (or not set), Graphiti will use Neo4j with the provided connection parameters.
+
 #### FalkorDB Configuration
 
 FalkorDB can be configured using the following environment variables:
