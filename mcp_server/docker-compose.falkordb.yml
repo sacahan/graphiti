@@ -1,0 +1,61 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "6379:6379" # Redis-compatible protocol port
+    environment:
+      - FALKORDB_ARGS=--loadmodule /FalkorDB/bin/src/falkordb.so
+    volumes:
+      - falkordb_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    command: ["redis-server", "--loadmodule", "/FalkorDB/bin/src/falkordb.so"]
+
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - path: .env
+        required: false # Makes the file optional. Default value is 'true'
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      - GRAPHITI_DB_TYPE=falkordb
+      - FALKORDB_URL=${FALKORDB_URL:-redis://falkordb:6379}
+      - GRAPHITI_DB_NAME=${GRAPHITI_DB_NAME:-graphiti_db}
+
+      # LLM configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4.1-mini}
+      - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-gpt-4.1-nano}
+      - EMBEDDER_MODEL_NAME=${EMBEDDER_MODEL_NAME:-text-embedding-3-small}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.0}
+
+      # Performance tuning for FalkorDB
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-20} # Higher limit for FalkorDB's performance
+      - PATH=/root/.local/bin:${PATH}
+
+      # Container-friendly defaults
+      - MCP_SERVER_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000" # Expose the MCP server via HTTP for SSE transport
+    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  falkordb_data:
