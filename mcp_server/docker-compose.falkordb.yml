@@ -1,0 +1,155 @@
+# Docker Compose for Graphiti MCP Server with FalkorDB
+# Optimized for production deployment with <500MB target
+#
+# Usage:
+#   1. Copy .env.falkordb.example to .env and configure your settings
+#   2. Run: docker-compose -f docker-compose.falkordb.yml up -d
+#   3. Access MCP server at http://localhost:8000
+#
+# For development, add --build flag to rebuild containers
+
+version: "3.8"
+
+services:
+  falkordb:
+    image: falkordb/falkordb:edge
+    container_name: graphiti-falkordb
+    ports:
+      - "${FALKORDB_PORT:-6379}:6379" # Redis-compatible protocol port
+    volumes:
+      - falkordb_data:/data
+    environment:
+      # FalkorDB performance optimizations
+      - FALKOR_QUERY_TIMEOUT=${FALKOR_QUERY_TIMEOUT:-300000} # 5 minutes
+      - FALKOR_MAX_MEMORY=${FALKOR_MAX_MEMORY:-512MB}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+
+  graphiti-mcp:
+    image: graphiti-mcp:falkordb
+    container_name: graphiti-mcp-server
+    build:
+      context: ..
+      dockerfile: mcp_server/Dockerfile.falkordb
+      target: runtime
+    env_file:
+      - path: .env.falkordb.example
+        required: false
+      - path: .env
+        required: false
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    environment:
+      # Database configuration - defaults optimized for container deployment
+      - GRAPHITI_DB_TYPE=falkordb
+      - FALKORDB_URL=redis://falkordb:6379
+      - GRAPHITI_DB_NAME=${GRAPHITI_DB_NAME:-graphiti_db}
+
+      # LLM configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      - MODEL_NAME=${MODEL_NAME:-gpt-4.1-mini}
+      - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-gpt-4.1-nano}
+      - EMBEDDER_MODEL_NAME=${EMBEDDER_MODEL_NAME:-text-embedding-3-small}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.0}
+
+      # Performance tuning for FalkorDB
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-20}
+
+      # Container environment
+      - MCP_SERVER_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Optional configurations
+      - GROUP_ID=${GROUP_ID:-}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    ports:
+      - "${MCP_SERVER_PORT:-8000}:8000" # MCP server HTTP/SSE endpoint
+    volumes:
+      # Optional: mount configuration files
+      - type: bind
+        source: ./
+        target: /app/config
+        read_only: true
+        bind:
+          create_host_path: false
+    command: ["python", "graphiti_mcp_server.py", "--transport", "sse"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8000/status",
+          "--connect-timeout",
+          "5",
+          "--max-time",
+          "10",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+volumes:
+  falkordb_data:
+    driver: local
+# Optional: Add monitoring stack
+# Uncomment to enable Prometheus metrics collection
+#
+# services:
+#   prometheus:
+#     image: prom/prometheus:latest
+#     container_name: graphiti-prometheus
+#     ports:
+#       - "9090:9090"
+#     volumes:
+#       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+#     command:
+#       - '--config.file=/etc/prometheus/prometheus.yml'
+#       - '--storage.tsdb.path=/prometheus'
+#       - '--web.console.libraries=/etc/prometheus/console_libraries'
+#       - '--web.console.templates=/etc/prometheus/consoles'
+#       - '--web.enable-lifecycle'
+#     depends_on:
+#       - graphiti-mcp
+#
+#   grafana:
+#     image: grafana/grafana:latest
+#     container_name: graphiti-grafana
+#     ports:
+#       - "3000:3000"
+#     environment:
+#       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+#     volumes:
+#       - grafana_data:/var/lib/grafana
+#     depends_on:
+#       - prometheus
+#
+# volumes:
+#   grafana_data:

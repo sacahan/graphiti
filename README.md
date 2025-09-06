@@ -98,7 +98,7 @@ frequently changing data. Graphiti addresses these challenges by providing:
 ## Graphiti vs. GraphRAG
 
 | Aspect                     | GraphRAG                              | Graphiti                                         |
-|----------------------------|---------------------------------------|--------------------------------------------------|
+| -------------------------- | ------------------------------------- | ------------------------------------------------ |
 | **Primary Use**            | Static document summarization         | Dynamic data management                          |
 | **Data Handling**          | Batch-oriented processing             | Continuous, incremental updates                  |
 | **Knowledge Structure**    | Entity clusters & community summaries | Episodic data, semantic entities, communities    |
@@ -271,12 +271,68 @@ must be set.
 
 ### Database Configuration
 
-Database names are configured directly in the driver constructors:
+Graphiti supports configuration via environment variables for both Neo4j and FalkorDB databases.
 
-- **Neo4j**: Database name defaults to `neo4j` (hardcoded in Neo4jDriver)
-- **FalkorDB**: Database name defaults to `default_db` (hardcoded in FalkorDriver)
+#### Database Type Selection
 
-As of v0.17.0, if you need to customize your database configuration, you can instantiate a database driver and pass it
+Graphiti can automatically select the appropriate database driver based on the `GRAPHITI_DB_TYPE` environment variable:
+
+- `GRAPHITI_DB_TYPE`: Database backend to use (`neo4j` or `falkordb`, default: `neo4j`)
+
+**Usage:**
+
+```bash
+# Use Neo4j (default)
+export GRAPHITI_DB_TYPE=neo4j
+
+# Use FalkorDB
+export GRAPHITI_DB_TYPE=falkordb
+```
+
+When using `GRAPHITI_DB_TYPE=falkordb`, the Graphiti constructor will automatically create a FalkorDB driver using the FalkorDB environment variables below, ignoring any Neo4j connection parameters (uri, user, password).
+
+When using `GRAPHITI_DB_TYPE=neo4j` (or not set), Graphiti will use Neo4j with the provided connection parameters.
+
+#### FalkorDB Configuration
+
+FalkorDB can be configured using the following environment variables:
+
+- `FALKORDB_HOST`: FalkorDB server host (default: `localhost`)
+- `FALKORDB_PORT`: FalkorDB server port (default: `6379`)
+- `FALKORDB_DATABASE`: Database number (default: `0`)
+- `FALKORDB_PASSWORD`: Authentication password (optional)
+- `FALKORDB_CONNECTION_STRING`: Alternative Redis-style connection string (optional)
+
+**Connection String Format:**
+
+```
+redis://[user][:password]@[host][:port][/database]
+```
+
+**Examples:**
+
+```bash
+# Individual environment variables
+export FALKORDB_HOST=localhost
+export FALKORDB_PORT=6379
+export FALKORDB_DATABASE=0
+export FALKORDB_PASSWORD=mypassword
+
+# Or using connection string (takes precedence)
+export FALKORDB_CONNECTION_STRING=redis://:mypassword@localhost:6379/0
+```
+
+#### Neo4j Configuration
+
+Neo4j connection parameters are typically configured using:
+
+- `NEO4J_URI`: Neo4j connection URI (default: `bolt://localhost:7687`)
+- `NEO4J_USER`: Neo4j username (default: `neo4j`)
+- `NEO4J_PASSWORD`: Neo4j password
+
+#### Custom Driver Configuration
+
+As of v0.17.0, if you need advanced database configuration, you can instantiate a database driver and pass it
 to the Graphiti constructor using the `graph_driver` parameter.
 
 #### Neo4j with Custom Database Name
@@ -555,9 +611,9 @@ When you initialize a Graphiti instance, we collect:
 - **System information**: Operating system, Python version, and system architecture
 - **Graphiti version**: The version you're using
 - **Configuration choices**:
-    - LLM provider type (OpenAI, Azure, Anthropic, etc.)
-    - Database backend (Neo4j, FalkorDB, Kuzu, Amazon Neptune Database or Neptune Analytics)
-    - Embedder provider (OpenAI, Azure, Voyage, etc.)
+  - LLM provider type (OpenAI, Azure, Anthropic, etc.)
+  - Database backend (Neo4j, FalkorDB, Kuzu, Amazon Neptune Database or Neptune Analytics)
+  - Embedder provider (OpenAI, Azure, Voyage, etc.)
 
 ### What We Don't Collect
 
@@ -632,8 +688,8 @@ Telemetry is automatically disabled during test runs (when `pytest` is detected)
 Graphiti is under active development. We aim to maintain API stability while working on:
 
 - [x] Supporting custom graph schemas:
-    - Allow developers to provide their own defined node and edge classes when ingesting episodes
-    - Enable more flexible knowledge representation tailored to specific use cases
+  - Allow developers to provide their own defined node and edge classes when ingesting episodes
+  - Enable more flexible knowledge representation tailored to specific use cases
 - [x] Enhancing retrieval capabilities with more robust and configurable options
 - [x] Graphiti MCP Server
 - [ ] Expanding test coverage to ensure reliability and catch edge cases

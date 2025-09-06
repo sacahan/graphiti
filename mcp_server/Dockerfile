@@ -26,15 +26,29 @@ ENV UV_COMPILE_BYTECODE=1 \
 # Create non-root user
 RUN groupadd -r app && useradd -r -d /app -g app app
 
-# Copy project files for dependency installation (better caching)
-COPY pyproject.toml uv.lock ./
+# Copy the graphiti-core source code and build a wheel
+COPY graphiti_core/ /tmp/graphiti-core/graphiti_core/
+COPY pyproject.toml README.md LICENSE /tmp/graphiti-core/
+WORKDIR /tmp/graphiti-core
+RUN uv build --wheel
 
-# Install dependencies first (better layer caching)
+# Switch back to app directory
+WORKDIR /app
+
+# Copy MCP server project files for dependency installation
+COPY mcp_server/pyproject.toml ./
+
+# Remove the editable dependency and use the wheel instead
+RUN sed -i 's/graphiti-core = { path = "[^"]*", editable = true }//' pyproject.toml
+
+# Install the graphiti-core wheel and other dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv venv && \
+    uv pip install /tmp/graphiti-core/dist/*.whl && \
+    uv pip install -e .
 
 # Copy application code
-COPY graphiti_mcp_server.py ./
+COPY mcp_server/graphiti_mcp_server.py ./
 
 # Change ownership to app user
 RUN chown -Rv app:app /app

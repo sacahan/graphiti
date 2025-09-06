@@ -48,11 +48,16 @@ class TestFalkorDriver:
         """Test initialization with connection parameters."""
         with patch('graphiti_core.driver.falkordb_driver.FalkorDB') as mock_falkor_db:
             driver = FalkorDriver(
-                host='test-host', port='1234', username='test-user', password='test-pass'
+                host='test-host',
+                port='1234',
+                username='test-user',
+                password='test-pass',
             )
             assert driver.provider == GraphProvider.FALKORDB
+            # Note: username parameter is no longer passed to FalkorDB client
+            # It was a legacy parameter; password takes precedence
             mock_falkor_db.assert_called_once_with(
-                host='test-host', port='1234', username='test-user', password='test-pass'
+                host='test-host', port='1234', password='test-pass'
             )
 
     @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
@@ -308,7 +313,10 @@ class TestDatetimeConversion:
         input_dict = {
             'string_val': 'test',
             'datetime_val': test_datetime,
-            'nested_dict': {'nested_datetime': test_datetime, 'nested_string': 'nested_test'},
+            'nested_dict': {
+                'nested_datetime': test_datetime,
+                'nested_string': 'nested_test',
+            },
         }
 
         result = convert_datetimes_to_strings(input_dict)

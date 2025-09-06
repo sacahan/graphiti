@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: graphiti-config
+  namespace: graphiti
+  labels:
+    app.kubernetes.io/name: graphiti-mcp
+    app.kubernetes.io/component: config
+data:
+  # Database configuration
+  GRAPHITI_DB_TYPE: "falkordb"
+  FALKORDB_URL: "redis://falkordb-service:6379"
+  GRAPHITI_DB_NAME: "graphiti_db"
+
+  # Performance configuration
+  SEMAPHORE_LIMIT: "20"
+
+  # Server configuration
+  MCP_SERVER_HOST: "0.0.0.0"
+  LOG_LEVEL: "INFO"
+  PYTHONUNBUFFERED: "1"
+
+  # Model defaults
+  MODEL_NAME: "gpt-4.1-mini"
+  SMALL_MODEL_NAME: "gpt-4.1-nano"
+  EMBEDDER_MODEL_NAME: "text-embedding-3-small"
+  LLM_TEMPERATURE: "0.0"
+
+  # FalkorDB configuration
+  FALKOR_QUERY_TIMEOUT: "300000"
+  FALKOR_MAX_MEMORY: "512MB"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: graphiti-secrets
+  namespace: graphiti
+  labels:
+    app.kubernetes.io/name: graphiti-mcp
+    app.kubernetes.io/component: secret
+type: Opaque
+stringData:
+  # Required: OpenAI API Key
+  OPENAI_API_KEY: "your_openai_api_key_here"
+
+  # Optional: Other LLM Provider API Keys
+  ANTHROPIC_API_KEY: ""
+  GOOGLE_API_KEY: ""
+  GROQ_API_KEY: ""
+  VOYAGE_API_KEY: ""
+
+  # Optional: Azure OpenAI Configuration
+  AZURE_OPENAI_ENDPOINT: ""
+  AZURE_OPENAI_API_VERSION: ""
+  AZURE_OPENAI_DEPLOYMENT_NAME: ""
+  AZURE_OPENAI_EMBEDDING_API_VERSION: ""
+  AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME: ""

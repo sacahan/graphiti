@@ -25,7 +25,7 @@ from typing_extensions import LiteralString
 from graphiti_core.cross_encoder.client import CrossEncoderClient
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.driver.driver import GraphDriver
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
+from graphiti_core.driver.factory import DriverFactory
 from graphiti_core.edges import (
     CommunityEdge,
     Edge,
@@ -120,6 +120,7 @@ class Graphiti:
         uri: str | None = None,
         user: str | None = None,
         password: str | None = None,
+        database: str | None = None,
         llm_client: LLMClient | None = None,
         embedder: EmbedderClient | None = None,
         cross_encoder: CrossEncoderClient | None = None,
@@ -127,6 +128,7 @@ class Graphiti:
         graph_driver: GraphDriver | None = None,
         max_coroutines: int | None = None,
         ensure_ascii: bool = False,
+        **kwargs,
     ):
         """
         Initialize a Graphiti instance.
@@ -136,12 +138,14 @@ class Graphiti:
 
         Parameters
         ----------
-        uri : str
-            The URI of the Neo4j database.
-        user : str
-            The username for authenticating with the Neo4j database.
-        password : str
-            The password for authenticating with the Neo4j database.
+        uri : str | None
+            The URI of the database. Required for Neo4j, ignored for FalkorDB.
+        user : str | None
+            The username for authenticating with the database. Required for Neo4j, ignored for FalkorDB.
+        password : str | None
+            The password for authenticating with the database. Required for Neo4j, optional for FalkorDB.
+        database : str | None
+            The database name. Optional for both Neo4j and FalkorDB.
         llm_client : LLMClient | None, optional
             An instance of LLMClient for natural language processing tasks.
             If not provided, a default OpenAIClient will be initialized.
@@ -155,7 +159,7 @@ class Graphiti:
             Whether to store the raw content of episodes. Defaults to True.
         graph_driver : GraphDriver | None, optional
             An instance of GraphDriver for database operations.
-            If not provided, a default Neo4jDriver will be initialized.
+            If not provided, a driver will be created based on GRAPHITI_DB_TYPE environment variable.
         max_coroutines : int | None, optional
             The maximum number of concurrent operations allowed. Overrides SEMAPHORE_LIMIT set in the environment.
             If not set, the Graphiti default is used.
@@ -163,6 +167,8 @@ class Graphiti:
             Whether to escape non-ASCII characters in JSON serialization for prompts. Defaults to False.
             Set as False to preserve non-ASCII characters (e.g., Korean, Japanese, Chinese) in their
             original form, making them readable in LLM logs and improving model understanding.
+        **kwargs
+            Additional configuration parameters passed through to the database driver.
 
         Returns
         -------
@@ -170,13 +176,17 @@ class Graphiti:
 
         Notes
         -----
-        This method establishes a connection to a graph database (Neo4j by default) using the provided
-        credentials. It also sets up the LLM client, either using the provided client
-        or by creating a default OpenAIClient.
+        Database Selection:
+        The database type is determined by the GRAPHITI_DB_TYPE environment variable:
+        - 'neo4j' (default): Uses Neo4j with provided uri, user, and password
+        - 'falkordb': Uses FalkorDB with environment-based configuration (uri, user, password are ignored)
 
-        The default database name is defined during the driver’s construction. If a different database name
-        is required, it should be specified in the URI or set separately after
-        initialization.
+        For FalkorDB, configuration is controlled by these environment variables:
+        - FALKORDB_HOST: Server host (default: localhost)
+        - FALKORDB_PORT: Server port (default: 6379)
+        - FALKORDB_DATABASE: Database number (default: 0)
+        - FALKORDB_PASSWORD: Authentication password (optional)
+        - FALKORDB_CONNECTION_STRING: Redis-style connection string (optional)
 
         The OpenAI API key is expected to be set in the environment variables.
         Make sure to set the OPENAI_API_KEY environment variable before initializing
@@ -186,9 +196,37 @@ class Graphiti:
         if graph_driver:
             self.driver = graph_driver
         else:
-            if uri is None:
-                raise ValueError('uri must be provided when graph_driver is None')
-            self.driver = Neo4jDriver(uri, user, password)
+            try:
+                self.driver = DriverFactory.create_driver(
+                    uri=uri, user=user, password=password, database=database, **kwargs
+                )
+            except ValueError as e:
+                # Enhance error message with user guidance
+                error_msg = str(e)
+                if 'uri must be provided' in error_msg:
+                    raise ValueError(
+                        f'{error_msg}. '
+                        'For Neo4j, provide uri, user, and password parameters. '
+                        'For FalkorDB, set GRAPHITI_DB_TYPE=falkordb and configure using environment variables.'
+                    ) from e
+                elif 'Unsupported database type' in error_msg:
+                    raise ValueError(
+                        f'{error_msg}. '
+                        "Set GRAPHITI_DB_TYPE environment variable to 'neo4j' or 'falkordb'."
+                    ) from e
+                else:
+                    raise
+            except ImportError as e:
+                # Enhance ImportError with installation guidance
+                error_msg = str(e)
+                if 'falkordb' in error_msg.lower():
+                    raise ImportError(
+                        f'{error_msg}. '
+                        'Make sure you have FalkorDB installed and accessible. '
+                        'You can also switch to Neo4j by setting GRAPHITI_DB_TYPE=neo4j.'
+                    ) from e
+                else:
+                    raise
 
         self.store_raw_episode_content = store_raw_episode_content
         self.max_coroutines = max_coroutines
@@ -489,7 +527,11 @@ class Graphiti:
             # Extract entities as nodes
 
             extracted_nodes = await extract_nodes(
-                self.clients, episode, previous_episodes, entity_types, excluded_entity_types
+                self.clients,
+                episode,
+                previous_episodes,
+                entity_types,
+                excluded_entity_types,
             )
 
             # Extract edges and resolve nodes
@@ -542,7 +584,12 @@ class Graphiti:
                 episode.content = ''
 
             await add_nodes_and_edges_bulk(
-                self.driver, [episode], episodic_edges, hydrated_nodes, entity_edges, self.embedder
+                self.driver,
+                [episode],
+                episodic_edges,
+                hydrated_nodes,
+                entity_edges,
+                self.embedder,
             )
 
             communities = []
@@ -553,7 +600,11 @@ class Graphiti:
                 communities, community_edges = await semaphore_gather(
                     *[
                         update_community(
-                            self.driver, self.llm_client, self.embedder, node, self.ensure_ascii
+                            self.driver,
+                            self.llm_client,
+                            self.embedder,
+                            node,
+                            self.ensure_ascii,
                         )
                         for node in nodes
                     ],
@@ -636,17 +687,19 @@ class Graphiti:
             )
 
             episodes = [
-                await EpisodicNode.get_by_uuid(self.driver, episode.uuid)
-                if episode.uuid is not None
-                else EpisodicNode(
-                    name=episode.name,
-                    labels=[],
-                    source=episode.source,
-                    content=episode.content,
-                    source_description=episode.source_description,
-                    group_id=group_id,
-                    created_at=now,
-                    valid_at=episode.reference_time,
+                (
+                    await EpisodicNode.get_by_uuid(self.driver, episode.uuid)
+                    if episode.uuid is not None
+                    else EpisodicNode(
+                        name=episode.name,
+                        labels=[],
+                        source=episode.source,
+                        content=episode.content,
+                        source_description=episode.source_description,
+                        group_id=group_id,
+                        created_at=now,
+                        valid_at=episode.reference_time,
+                    )
                 )
                 for episode in bulk_episodes
             ]
@@ -957,7 +1010,12 @@ class Graphiti:
     ) -> SearchResults:
         """DEPRECATED"""
         return await self.search_(
-            query, config, group_ids, center_node_uuid, bfs_origin_node_uuids, search_filter
+            query,
+            config,
+            group_ids,
+            center_node_uuid,
+            bfs_origin_node_uuids,
+            search_filter,
         )
 
     async def search_(

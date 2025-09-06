@@ -93,3 +93,8 @@ docstring-code-format = true
 include = ["graphiti_core"]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
+
+[dependency-groups]
+dev = [
+    "coverage>=7.10.6",
+]

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "mcp__zen__chat",
+      "mcp__zen__analyze"
     ],
     "deny": [],
     "ask": []

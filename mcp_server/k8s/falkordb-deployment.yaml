@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: falkordb
+  namespace: graphiti
+  labels:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: graphiti-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: falkordb
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: falkordb
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: graphiti-mcp
+    spec:
+      containers:
+        - name: falkordb
+          image: falkordb/falkordb:edge
+          ports:
+            - containerPort: 6379
+              name: redis-port
+          env:
+            - name: FALKOR_QUERY_TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: graphiti-config
+                  key: FALKOR_QUERY_TIMEOUT
+            - name: FALKOR_MAX_MEMORY
+              valueFrom:
+                configMapKeyRef:
+                  name: graphiti-config
+                  key: FALKOR_MAX_MEMORY
+          volumeMounts:
+            - name: falkordb-storage
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -p
+                - "6379"
+                - ping
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - -p
+                - "6379"
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: falkordb-storage
+          persistentVolumeClaim:
+            claimName: falkordb-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: falkordb-pvc
+  namespace: graphiti
+  labels:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: default  # Uncomment and specify if needed
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: falkordb-service
+  namespace: graphiti
+  labels:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: redis-port
+      protocol: TCP
+      name: redis
+  selector:
+    app.kubernetes.io/name: falkordb
+    app.kubernetes.io/component: database
