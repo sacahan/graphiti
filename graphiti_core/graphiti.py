@@ -26,6 +26,7 @@ from typing_extensions import LiteralString
 from graphiti_core.cross_encoder.client import CrossEncoderClient
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.driver.driver import GraphDriver
+from graphiti_core.driver.factory import DriverFactory
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.edges import (
     CommunityEdge,
@@ -104,51 +105,6 @@ from graphiti_core.utils.ontology_utils.entity_types_utils import validate_entit
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-
-
-def _create_default_driver(
-    uri: str | None = None, user: str | None = None, password: str | None = None
-) -> GraphDriver:
-    """
-    Create a default graph driver based on environment configuration.
-
-    The driver type is determined by the GRAPHITI_DB_TYPE environment variable:
-    - 'falkordb': Creates a FalkorDB driver with environment-based configuration
-    - 'neo4j' (default): Creates a Neo4j driver with provided URI/credentials
-
-    Args:
-        uri: Database URI (required for Neo4j, ignored for FalkorDB)
-        user: Username (required for Neo4j, ignored for FalkorDB)
-        password: Password (required for Neo4j, may be used by FalkorDB)
-
-    Returns:
-        GraphDriver: Configured driver instance
-
-    Raises:
-        ValueError: If required parameters are missing for the selected driver type
-        ImportError: If the selected driver type is not available
-    """
-    db_type = os.getenv("GRAPHITI_DB_TYPE", "neo4j").lower()
-
-    if db_type == "falkordb":
-        try:
-            from graphiti_core.driver.falkordb_driver import FalkorDriver
-
-            return FalkorDriver()
-        except ImportError as e:
-            raise ImportError(
-                "FalkorDB driver is not available. "
-                "Install it with: pip install graphiti-core[falkordb]"
-            ) from e
-    elif db_type == "neo4j":
-        if uri is None:
-            raise ValueError("uri must be provided when using Neo4j driver")
-        return Neo4jDriver(uri, user, password)
-    else:
-        raise ValueError(
-            f"Unsupported database type: {db_type}. "
-            "Supported types: 'neo4j', 'falkordb'"
-        )
 
 
 class AddEpisodeResults(BaseModel):
@@ -236,7 +192,7 @@ class Graphiti:
         if graph_driver:
             self.driver = graph_driver
         else:
-            self.driver = _create_default_driver(uri, user, password)
+            self.driver = DriverFactory.create_driver(uri, user, password)
 
         self.store_raw_episode_content = store_raw_episode_content
         self.max_coroutines = max_coroutines
