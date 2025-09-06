@@ -21,21 +21,24 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from graphiti_core.driver.driver import GraphDriver
+from graphiti_core.driver.factory import DriverFactory
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
-from graphiti_core.graphiti import Graphiti, _create_default_driver
+from graphiti_core.graphiti import Graphiti
 
 
 class TestDefaultDriverCreation:
     """Test automatic driver selection based on GRAPHITI_DB_TYPE environment variable."""
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch("graphiti_core.graphiti.Neo4jDriver")
+    @patch("graphiti_core.driver.factory.Neo4jDriver")
     def test_default_neo4j_driver_creation(self, mock_neo4j_driver_class):
         """Test that Neo4j driver is created by default when no GRAPHITI_DB_TYPE is set."""
         mock_driver = MagicMock(spec=GraphDriver)
         mock_neo4j_driver_class.return_value = mock_driver
 
-        driver = _create_default_driver("bolt://localhost:7687", "neo4j", "password")
+        driver = DriverFactory.create_driver(
+            "bolt://localhost:7687", "neo4j", "password"
+        )
 
         mock_neo4j_driver_class.assert_called_once_with(
             "bolt://localhost:7687", "neo4j", "password"
@@ -43,13 +46,15 @@ class TestDefaultDriverCreation:
         assert driver is mock_driver
 
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "neo4j"})
-    @patch("graphiti_core.graphiti.Neo4jDriver")
+    @patch("graphiti_core.driver.factory.Neo4jDriver")
     def test_explicit_neo4j_driver_creation(self, mock_neo4j_driver_class):
         """Test that Neo4j driver is created when GRAPHITI_DB_TYPE is explicitly set to 'neo4j'."""
         mock_driver = MagicMock(spec=GraphDriver)
         mock_neo4j_driver_class.return_value = mock_driver
 
-        driver = _create_default_driver("bolt://localhost:7687", "neo4j", "password")
+        driver = DriverFactory.create_driver(
+            "bolt://localhost:7687", "neo4j", "password"
+        )
 
         mock_neo4j_driver_class.assert_called_once_with(
             "bolt://localhost:7687", "neo4j", "password"
@@ -57,13 +62,15 @@ class TestDefaultDriverCreation:
         assert driver is mock_driver
 
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "NEO4J"})
-    @patch("graphiti_core.graphiti.Neo4jDriver")
+    @patch("graphiti_core.driver.factory.Neo4jDriver")
     def test_case_insensitive_neo4j_driver_creation(self, mock_neo4j_driver_class):
         """Test that GRAPHITI_DB_TYPE is case insensitive for Neo4j."""
         mock_driver = MagicMock(spec=GraphDriver)
         mock_neo4j_driver_class.return_value = mock_driver
 
-        driver = _create_default_driver("bolt://localhost:7687", "neo4j", "password")
+        driver = DriverFactory.create_driver(
+            "bolt://localhost:7687", "neo4j", "password"
+        )
 
         mock_neo4j_driver_class.assert_called_once_with(
             "bolt://localhost:7687", "neo4j", "password"
@@ -76,7 +83,7 @@ class TestDefaultDriverCreation:
             with pytest.raises(
                 ValueError, match="uri must be provided when using Neo4j driver"
             ):
-                _create_default_driver(uri=None)
+                DriverFactory.create_driver(uri=None)
 
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "falkordb"})
     def test_falkordb_driver_creation(self):
@@ -87,7 +94,7 @@ class TestDefaultDriverCreation:
             mock_driver = MagicMock(spec=GraphDriver)
             mock_falkor_driver_class.return_value = mock_driver
 
-            driver = _create_default_driver(
+            driver = DriverFactory.create_driver(
                 "ignored://uri", "ignored_user", "ignored_pass"
             )
 
@@ -103,7 +110,7 @@ class TestDefaultDriverCreation:
             mock_driver = MagicMock(spec=GraphDriver)
             mock_falkor_driver_class.return_value = mock_driver
 
-            driver = _create_default_driver()
+            driver = DriverFactory.create_driver()
 
             mock_falkor_driver_class.assert_called_once_with()
             assert driver is mock_driver
@@ -116,13 +123,13 @@ class TestDefaultDriverCreation:
             side_effect=ImportError("No module named 'falkordb'"),
         ):
             with pytest.raises(ImportError, match="FalkorDB driver is not available"):
-                _create_default_driver()
+                DriverFactory.create_driver()
 
     @patch.dict(os.environ, {"GRAPHITI_DB_TYPE": "invalid_db"})
     def test_unsupported_database_type(self):
         """Test that error is raised for unsupported database types."""
         with pytest.raises(ValueError, match="Unsupported database type: invalid_db"):
-            _create_default_driver()
+            DriverFactory.create_driver()
 
 
 class TestGraphitiDriverIntegration:
@@ -133,7 +140,9 @@ class TestGraphitiDriverIntegration:
         """Test that Graphiti uses Neo4j driver by default."""
         mock_driver = MagicMock(spec=GraphDriver)
 
-        with patch("graphiti_core.graphiti.Neo4jDriver") as mock_neo4j_driver_class:
+        with patch(
+            "graphiti_core.driver.factory.Neo4jDriver"
+        ) as mock_neo4j_driver_class:
             mock_neo4j_driver_class.return_value = mock_driver
 
             graphiti = Graphiti(
@@ -216,7 +225,9 @@ class TestBackwardCompatibility:
         """Test that traditional Neo4j initialization pattern continues to work."""
         mock_driver = MagicMock(spec=GraphDriver)
 
-        with patch("graphiti_core.graphiti.Neo4jDriver") as mock_neo4j_driver_class:
+        with patch(
+            "graphiti_core.driver.factory.Neo4jDriver"
+        ) as mock_neo4j_driver_class:
             mock_neo4j_driver_class.return_value = mock_driver
 
             # This should work exactly as before
