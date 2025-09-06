@@ -5,6 +5,7 @@ created: 2025-09-05T10:38:27Z
 progress: 0%
 prd: .claude/prds/apply-falkor.md
 github: https://github.com/sacahan/graphiti/issues/1
+updated: 2025-09-06T01:31:13Z
 ---
 
 # Epic: apply-falkor

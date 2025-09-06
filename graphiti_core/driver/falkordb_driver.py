@@ -60,8 +60,8 @@ class FalkorDBConfig(BaseModel):
     """
 
     host: str = Field(default="localhost", description="FalkorDB server host")
-    port: int = Field(default=6379, description="FalkorDB server port", ge=1, le=65535)
-    database: int = Field(default=0, description="Database number", ge=0)
+    port: int = Field(default=6379, description="FalkorDB server port")
+    database: int = Field(default=0, description="Database number")
     password: str | None = Field(default=None, description="Authentication password")
     connection_string: str | None = Field(
         default=None, description="Redis-style connection string"
@@ -170,15 +170,36 @@ class FalkorDBConfig(BaseModel):
         if not v.strip():
             raise ValueError("Connection string cannot be empty")
 
-        # Validate Redis-style connection string format
+        # Basic check for redis scheme
+        if not v.startswith("redis://"):
+            raise ValueError(
+                f"Invalid connection string format: {v}. "
+                "Expected format: redis://[user][:password]@[host][:port][/db]"
+            )
+
+        # Check for empty redis://
+        if v == "redis://":
+            raise ValueError(
+                f"Invalid connection string format: {v}. "
+                "Expected format: redis://[user][:password]@[host][:port][/db]"
+            )
+
+        # Validate Redis-style connection string format with more lenient pattern
+        # Allow:
+        # redis://host
+        # redis://host:port
+        # redis://host:port/db
+        # redis://:password@host:port/db
+        # redis://user:password@host:port/db
+        # redis://:password@:port/db (empty host, use for localhost)
         redis_url_pattern = re.compile(
-            r"^redis://(?::([^@]+)@)?([^:/@]+)(?::(\d+))?(?:/(\d+))?$"
+            r"^redis://(?:(?:([^:/@]*):?([^@/]*)@)?([^:/@]+|:(?:\d+)?)?(?::(\d+))?)?(?:/(\d+))?$"
         )
 
         if not redis_url_pattern.match(v):
             raise ValueError(
                 f"Invalid connection string format: {v}. "
-                "Expected format: redis://[:password@]host:port/db"
+                "Expected format: redis://[user][:password]@[host][:port][/db]"
             )
 
         return v
