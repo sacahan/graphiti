@@ -8,8 +8,6 @@
 #
 # For development, add --build flag to rebuild containers
 
-version: "3.8"
-
 services:
   falkordb:
     image: falkordb/falkordb:edge
@@ -17,7 +15,7 @@ services:
     ports:
       - "${FALKORDB_PORT:-6379}:6379" # Redis-compatible protocol port
     volumes:
-      - falkordb_data:/data
+      - ./data:/data
     environment:
       # FalkorDB performance optimizations
       - FALKOR_QUERY_TIMEOUT=${FALKOR_QUERY_TIMEOUT:-300000} # 5 minutes
@@ -37,26 +35,19 @@ services:
         reservations:
           memory: 256M
           cpus: "0.5"
+    networks:
+      - graphiti_network
 
   graphiti-mcp:
-    image: graphiti-mcp:falkordb
-    container_name: graphiti-mcp-server
-    build:
-      context: ..
-      dockerfile: mcp_server/Dockerfile.falkordb
-      target: runtime
-    env_file:
-      - path: .env.falkordb.example
-        required: false
-      - path: .env
-        required: false
+    image: sacahan/graphiti-mcp:latest
+    container_name: graphiti-mcp
     depends_on:
       falkordb:
         condition: service_healthy
     environment:
       # Database configuration - defaults optimized for container deployment
       - GRAPHITI_DB_TYPE=falkordb
-      - FALKORDB_URL=redis://falkordb:6379
+      - FALKORDB_CONNECTION_STRING=${FALKORDB_CONNECTION_STRING:-redis://falkordb:6379}
       - GRAPHITI_DB_NAME=${GRAPHITI_DB_NAME:-graphiti_db}
 
       # LLM configuration
@@ -73,22 +64,8 @@ services:
       - MCP_SERVER_HOST=0.0.0.0
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-
-      # Optional configurations
-      - GROUP_ID=${GROUP_ID:-}
-      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
-      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     ports:
-      - "${MCP_SERVER_PORT:-8000}:8000" # MCP server HTTP/SSE endpoint
-    volumes:
-      # Optional: mount configuration files
-      - type: bind
-        source: ./
-        target: /app/config
-        read_only: true
-        bind:
-          create_host_path: false
+      - "127.0.0.1:8060:8000" # MCP server HTTP/SSE endpoint
     command: ["python", "graphiti_mcp_server.py", "--transport", "sse"]
     healthcheck:
       test:
@@ -110,46 +87,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1024M
-          cpus: "2.0"
-        reservations:
           memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
           cpus: "0.5"
+    networks:
+      - graphiti_network
 
-volumes:
-  falkordb_data:
-    driver: local
-# Optional: Add monitoring stack
-# Uncomment to enable Prometheus metrics collection
-#
-# services:
-#   prometheus:
-#     image: prom/prometheus:latest
-#     container_name: graphiti-prometheus
-#     ports:
-#       - "9090:9090"
-#     volumes:
-#       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-#     command:
-#       - '--config.file=/etc/prometheus/prometheus.yml'
-#       - '--storage.tsdb.path=/prometheus'
-#       - '--web.console.libraries=/etc/prometheus/console_libraries'
-#       - '--web.console.templates=/etc/prometheus/consoles'
-#       - '--web.enable-lifecycle'
-#     depends_on:
-#       - graphiti-mcp
-#
-#   grafana:
-#     image: grafana/grafana:latest
-#     container_name: graphiti-grafana
-#     ports:
-#       - "3000:3000"
-#     environment:
-#       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-#     volumes:
-#       - grafana_data:/var/lib/grafana
-#     depends_on:
-#       - prometheus
-#
-# volumes:
-#   grafana_data:
+networks:
+  graphiti_network:
+    driver: bridge
