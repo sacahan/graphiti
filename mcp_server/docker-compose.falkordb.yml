@@ -14,6 +14,7 @@ services:
     container_name: graphiti-falkordb
     ports:
       - "${FALKORDB_PORT:-6379}:6379" # Redis-compatible protocol port
+      - "${FALKORDB_UI_PORT:-3000}:3000" # FalkorDB Browser UI
     volumes:
       - ./data:/data
     environment:
@@ -22,10 +23,10 @@ services:
       - FALKOR_MAX_MEMORY=${FALKOR_MAX_MEMORY:-512MB}
     healthcheck:
       test: ["CMD", "redis-cli", "-p", "6379", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 5s
     restart: unless-stopped
     deploy:
       resources:
@@ -65,24 +66,15 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports:
-      - "127.0.0.1:8060:8000" # MCP server HTTP/SSE endpoint
+      - "127.0.0.1:8050:8000" # MCP server HTTP/SSE endpoint
     command: ["python", "graphiti_mcp_server.py", "--transport", "sse"]
     healthcheck:
       test:
-        [
-          "CMD",
-          "curl",
-          "-f",
-          "http://localhost:8000/status",
-          "--connect-timeout",
-          "5",
-          "--max-time",
-          "10",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 45s
+        ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/localhost/8000' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
     deploy:
       resources:

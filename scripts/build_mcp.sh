@@ -13,8 +13,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 info "=== Build process started ==="
 
 # Default supported platforms
-# PLATFORMS="linux/amd64,linux/arm64"
-PLATFORMS="linux/amd64"
+PLATFORMS="linux/amd64,linux/arm64"
+# PLATFORMS="linux/amd64"
 # Default image name
 IMAGE_NAME="sacahan/graphiti-mcp"
 

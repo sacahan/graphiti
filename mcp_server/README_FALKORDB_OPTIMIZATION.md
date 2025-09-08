@@ -192,6 +192,7 @@ INFO: FalkorDB initialization target achieved: 2.34s < 5s
    ```
 
 4. **Verify Performance**:
+
    ```bash
    python benchmark_performance.py --database falkordb
    ```
@@ -286,7 +287,9 @@ When making performance improvements:
 
 1. Update benchmark targets if needed
 2. Test both Neo4j and FalkorDB compatibility
-3. Update Docker configurations
+>
+> 3. Update Docker configurations
+>
 4. Add performance regression tests
 5. Update this documentation
 
